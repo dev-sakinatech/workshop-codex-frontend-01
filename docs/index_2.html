@@ -1,0 +1,1487 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prototype eSamsat — Maluku Utara</title>
+  <style>
+    /*
+      HOW TO CUSTOMIZE
+      - Warna utama: cari --accent dan --accent2
+      - Radius: --r
+      - Spasi: --s1..--s6
+      - Tipografi: --font
+
+      TODO (hook data/API)
+      - Ganti MOCK_DB di <script> dengan adaptor API (fetch) + pagination
+      - Tambah autentikasi/otorisasi per peran (Petugas vs Wajib Pajak)
+      - Integrasi pembayaran/VA/QRIS dan validasi NTPD
+
+      DAFTAR SELECTOR (untuk refine cepat)
+      Header: #header, #brandTitle, #projectInfo, #userChip, #toolbar, #searchBox, .btn
+      Sidebar: #sidebar, #sidebarHeader, #menu, .menu-item
+      Main: #main, #dashboard, #hero, #stats, .card.stat, .panel, #filterBar, #dataTable
+      Workflow: #workflow, #steps, .step, #stepContent, #stepActions
+      Modal: #modal
+      Footer: #footer
+
+      Function Map (semua fungsi yang dipakai event handler ada di bawah)
+      - initApp(): bootstrap state, render awal
+      - bindUI(): pasang event listener
+      - toggleSidebar(force?): buka/tutup sidebar (mobile)
+      - renderMenu(): render menu sidebar
+      - renderDashboard(): render ringkasan & tabel sesuai menu
+      - renderSteps(): render daftar step workflow
+      - renderStepContent(stepId): isi konten step
+      - goToStep(stepId): navigasi step + sinkron UI
+      - updateStats(): hitung angka ringkas dari mock data
+      - filterTable(): filter tabel berdasarkan keyword/status/periode
+      - openModal(title, bodyHtml): tampilkan modal
+      - closeModal(): tutup modal
+      - applyTheme(themeName): stub aman (opsional)
+    */
+
+    :root{
+      --bg:#0b1220;
+      --panel:#101a2f;
+      --panel2:#0f1930;
+      --text:#e9eefc;
+      --muted:#b9c4e2;
+      --border:rgba(255,255,255,.10);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --accent:#4f8cff;
+      --accent2:#22c55e;
+      --warn:#f59e0b;
+      --danger:#ef4444;
+      --r:16px;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      --s1:6px; --s2:10px; --s3:14px; --s4:18px; --s5:24px; --s6:32px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--font);
+      background: radial-gradient(900px 500px at 12% 8%, rgba(79,140,255,.18), transparent 55%),
+                  radial-gradient(800px 520px at 86% 16%, rgba(34,197,94,.14), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+
+    a{color:inherit}
+    .sr-only{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+
+    :focus-visible{outline:2px solid rgba(79,140,255,.85); outline-offset:2px; border-radius:12px}
+
+    /* Layout */
+    #header[data-ui="header"]{
+      position:sticky; top:0; z-index:10;
+      display:flex; align-items:center; justify-content:space-between;
+      padding: var(--s4) var(--s5);
+      background: linear-gradient(180deg, rgba(16,26,47,.92), rgba(16,26,47,.78));
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--border);
+    }
+    #brandTitle[data-ui="brand"]{
+      display:flex; gap:var(--s3); align-items:center;
+      font-weight:800; letter-spacing:.2px;
+    }
+    .brand-dot{width:12px;height:12px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 6px rgba(79,140,255,.14)}
+    #projectInfo[data-ui="project"]{
+      margin-left:var(--s4);
+      color:var(--muted);
+      font-size:13px;
+    }
+    #toolbar[data-ui="toolbar"]{
+      display:flex; align-items:center; gap:var(--s2);
+      min-width: 320px;
+      justify-content:flex-end;
+    }
+
+    #searchBox[data-ui="search"]{
+      width: min(420px, 52vw);
+      padding: 10px 12px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+    }
+    #searchBox::placeholder{color:rgba(185,196,226,.75)}
+
+    .btn[data-ui="button"]{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 14px;
+      cursor:pointer;
+      transition: transform .06s ease, background .12s ease, border-color .12s ease;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16)}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{background: rgba(79,140,255,.18); border-color: rgba(79,140,255,.35)}
+    .btn.secondary{background: rgba(255,255,255,.05)}
+
+    #userChip[data-ui="user"]{
+      display:flex; align-items:center; gap:10px;
+      padding: 8px 10px;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .chip-dot{width:9px;height:9px;border-radius:999px;background:var(--accent2);box-shadow:0 0 0 5px rgba(34,197,94,.12)}
+
+    .app{
+      display:grid;
+      grid-template-columns: 290px 1fr;
+      min-height: calc(100vh - 78px);
+    }
+
+    #sidebar[data-ui="sidebar"]{
+      border-right:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(16,26,47,.55), rgba(15,25,48,.30));
+      padding: var(--s5);
+    }
+
+    #sidebarHeader[data-ui="sidebar-header"]{
+      display:flex; align-items:flex-start; justify-content:space-between;
+      gap: var(--s3);
+      margin-bottom: var(--s4);
+    }
+
+    .sidebar-title{font-weight:800; letter-spacing:.2px}
+    .sidebar-sub{color:var(--muted); font-size:12px; margin-top:4px; line-height:1.35}
+
+    #menu[data-ui="menu"]{display:flex; flex-direction:column; gap:8px; margin-top: var(--s4)}
+
+    .menu-item[data-ui="menu-item"]{
+      display:flex; align-items:center; justify-content:space-between;
+      gap: var(--s3);
+      padding: 12px 12px;
+      border-radius: 14px;
+      border:1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      cursor:pointer;
+      text-align:left;
+    }
+    .menu-item:hover{background: rgba(255,255,255,.04)}
+    .menu-item.active{background: rgba(79,140,255,.12); border-color: rgba(79,140,255,.28)}
+    .menu-item .meta{color:var(--muted); font-size:12px}
+
+    #main[data-ui="main"]{padding: var(--s5);}
+
+    #dashboard[data-ui="dashboard"]{display:flex; flex-direction:column; gap: var(--s4)}
+
+    #hero[data-ui="hero"]{
+      background: linear-gradient(135deg, rgba(79,140,255,.16), rgba(34,197,94,.10));
+      border:1px solid var(--border);
+      border-radius: calc(var(--r) + 6px);
+      padding: var(--s5);
+      box-shadow: var(--shadow);
+    }
+    .hero-top{display:flex; align-items:flex-start; justify-content:space-between; gap: var(--s4)}
+    .hero-title{font-size: 20px; font-weight:900; margin:0 0 6px 0}
+    .hero-desc{margin:0; color: var(--muted); line-height:1.5; max-width: 70ch}
+    .hero-actions{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+
+    #stats[data-ui="stats"]{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--s3);
+    }
+
+    .card.stat[data-ui="card"]{
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      border-radius: var(--r);
+      padding: var(--s4);
+      box-shadow: 0 8px 18px rgba(0,0,0,.22);
+    }
+    .stat-k{color:var(--muted); font-size:12px}
+    .stat-v{font-weight:900; font-size:22px; margin-top:6px}
+    .stat-hint{margin-top:8px; color:rgba(185,196,226,.82); font-size:12px; line-height:1.35}
+
+    .panel[data-ui="panel"]{
+      background: rgba(16,26,47,.55);
+      border:1px solid var(--border);
+      border-radius: calc(var(--r) + 4px);
+      padding: var(--s5);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap: var(--s4); margin-bottom: var(--s4)}
+    .panel-title{margin:0; font-weight:900; font-size:16px}
+    .panel-sub{margin-top:6px; color:var(--muted); font-size:13px; line-height:1.45}
+
+    #alerts{display:flex; flex-direction:column; gap: 10px}
+    .alert{
+      padding: 12px 12px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+    }
+
+    .badge{display:inline-flex; align-items:center; gap:6px; padding: 3px 10px; border-radius: 999px; font-size:12px; border:1px solid var(--border); background: rgba(255,255,255,.03)}
+    .badge.ok{border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
+    .badge.warn{border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
+    .badge.danger{border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+
+    #filterBar[data-ui="filter"]{
+      display:flex; flex-wrap:wrap; gap:10px;
+      align-items:center;
+      margin: 0 0 var(--s4) 0;
+    }
+    .control[data-ui="control"]{display:flex; flex-direction:column; gap:6px; min-width: 180px}
+    .control label{color:var(--muted); font-size:12px}
+    input.textbox[data-ui="textbox"], select.select[data-ui="select"], textarea.memo[data-ui="memo"]{
+      width:100%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+    }
+
+    .table-wrap{overflow:auto; border-radius: 14px; border:1px solid var(--border)}
+    table#dataTable[data-ui="table"]{
+      width:100%;
+      border-collapse: collapse;
+      min-width: 860px;
+      background: rgba(10,16,30,.25);
+    }
+    #dataTable thead th{
+      text-align:left;
+      font-size:12px;
+      color: rgba(185,196,226,.9);
+      padding: 12px 12px;
+      border-bottom:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      position: sticky; top: 0;
+    }
+    #dataTable tbody td{
+      padding: 12px 12px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+      vertical-align: top;
+      color: rgba(233,238,252,.92);
+    }
+    #dataTable tbody tr:hover{background: rgba(255,255,255,.03)}
+
+    /* Workflow */
+    #workflow[data-ui="workflow"]{display:grid; grid-template-columns: 300px 1fr; gap: var(--s4)}
+    #steps[data-ui="steps"]{display:flex; flex-direction:column; gap: 10px}
+    .step[data-ui="step"]{
+      text-align:left;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      cursor:pointer;
+    }
+    .step:hover{background: rgba(255,255,255,.05)}
+    .step.active{border-color: rgba(79,140,255,.38); background: rgba(79,140,255,.12)}
+    .step .t{font-weight:800}
+    .step .d{margin-top:6px; color: var(--muted); font-size:12px; line-height:1.35}
+
+    #stepContent[data-ui="step-content"]{min-height: 280px}
+    #stepActions[data-ui="step-actions"]{display:flex; gap: 10px; flex-wrap:wrap; margin-top: var(--s4)}
+
+    /* Modal */
+    #modal[data-ui="modal"]{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding: var(--s5);
+      z-index:50;
+    }
+    #modal[aria-hidden="false"]{display:flex}
+    .modal-card{
+      width: min(760px, 100%);
+      border-radius: calc(var(--r) + 8px);
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(16,26,47,.92), rgba(16,26,47,.82));
+      box-shadow: 0 25px 70px rgba(0,0,0,.55);
+      padding: var(--s5);
+    }
+    .modal-head{display:flex; justify-content:space-between; gap: var(--s3); align-items:flex-start}
+    .modal-title{margin:0; font-weight:900; font-size:16px}
+    .modal-body{margin-top: var(--s4); color: rgba(233,238,252,.92); line-height:1.55}
+
+    #footer[data-ui="footer"]{
+      padding: var(--s5);
+      color: rgba(185,196,226,.82);
+      font-size:12px;
+      border-top:1px solid var(--border);
+      background: rgba(16,26,47,.35);
+    }
+
+    /* Responsive */
+    .hamburger{display:none}
+    @media (max-width: 980px){
+      #stats{grid-template-columns: repeat(2, minmax(0,1fr))}
+      #workflow{grid-template-columns: 1fr}
+      #toolbar{min-width: 0}
+    }
+    @media (max-width: 860px){
+      .app{grid-template-columns: 1fr}
+      #sidebar{
+        position:fixed; top:78px; left:0; bottom:0;
+        width: 320px;
+        transform: translateX(-103%);
+        transition: transform .18s ease;
+        z-index: 30;
+        box-shadow: 0 30px 70px rgba(0,0,0,.55);
+      }
+      body.sidebar-open #sidebar{transform: translateX(0)}
+      .hamburger{display:inline-flex}
+      #searchBox{width: min(360px, 44vw)}
+      #main{padding: var(--s4)}
+      #header{padding: var(--s3) var(--s4)}
+      #footer{padding: var(--s4)}
+    }
+  </style>
+</head>
+<body>
+  <header id="header" data-ui="header">
+    <div style="display:flex; align-items:center; gap:12px; min-width: 260px;">
+      <button id="btnSidebar" class="btn secondary hamburger" data-ui="button" aria-label="Buka atau tutup menu">Menu</button>
+      <div>
+        <div id="brandTitle" data-ui="brand"><span class="brand-dot" aria-hidden="true"></span> eSamsat Maluku Utara</div>
+        <div id="projectInfo" data-ui="project">Penetapan & Penagihan Pajak Kendaraan Bermotor (Prototype tanpa backend)</div>
+      </div>
+    </div>
+
+    <div id="toolbar" data-ui="toolbar">
+      <label class="sr-only" for="searchBox">Pencarian</label>
+      <input id="searchBox" data-ui="search" type="search" placeholder="Cari Nopol / NIK / Nama / No SKPD / NTPD" aria-label="Cari data" />
+      <button id="btnQuickPay" class="btn primary" data-ui="button" aria-label="Aksi cepat pembayaran">Pembayaran</button>
+      <button id="btnExport" class="btn" data-ui="button" aria-label="Export laporan">Export</button>
+      <div id="userChip" data-ui="user" aria-label="Info pengguna">
+        <span class="chip-dot" aria-hidden="true"></span>
+        <span id="userName">Mode: Petugas</span>
+        <select id="roleSelect" class="select" data-ui="select" aria-label="Pilih mode pengguna" style="padding:6px 10px; border-radius:999px;">
+          <option value="petugas" selected>Petugas</option>
+          <option value="wajibpajak">Wajib Pajak</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <div class="app">
+    <aside id="sidebar" data-ui="sidebar" aria-label="Navigasi modul">
+      <div id="sidebarHeader" data-ui="sidebar-header">
+        <div>
+          <div class="sidebar-title">Modul Utama</div>
+          <div class="sidebar-sub">Gabungan A/B/C: Data, Penetapan, Penagihan, Pembayaran/Validasi, Rekonsiliasi, Laporan.</div>
+        </div>
+        <button id="btnCloseSidebar" class="btn secondary" data-ui="button" aria-label="Tutup menu">Tutup</button>
+      </div>
+
+      <nav id="menu" data-ui="menu"></nav>
+
+      <div class="panel" data-ui="panel" style="margin-top: var(--s5); padding: var(--s4);">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div>
+            <div style="font-weight:900;">Ringkas</div>
+            <div style="color:var(--muted); font-size:12px; margin-top:4px; line-height:1.35;">Indikator utama untuk monitoring cepat.</div>
+          </div>
+          <span class="badge ok" id="badgeOnline">Sistem: Online</span>
+        </div>
+        <div id="alerts" style="margin-top: var(--s3);">
+          <div class="alert" id="alert1">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <strong>Pengingat</strong>
+              <span class="badge warn" id="lateCountBadge">0 Tunggakan</span>
+            </div>
+            <div style="margin-top:6px; color:rgba(185,196,226,.9); font-size:12px; line-height:1.4;">
+              Fokus pada kendaraan jatuh tempo dan verifikasi pembayaran.
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main id="main" data-ui="main">
+      <div id="dashboard" data-ui="dashboard">
+        <section id="hero" data-ui="hero" aria-label="Ringkasan aplikasi">
+          <div class="hero-top">
+            <div>
+              <h1 class="hero-title" id="heroTitle">Dashboard Penetapan & Penagihan</h1>
+              <p class="hero-desc" id="heroDesc">
+                Pantau data kendaraan dan wajib pajak, buat penetapan (SKPD), jalankan penagihan, validasi pembayaran (NTPD), rekonsiliasi, hingga export laporan.
+              </p>
+            </div>
+            <div class="hero-actions" aria-label="Aksi cepat">
+              <button id="btnNewSKPD" class="btn primary" data-ui="button" aria-label="Buat penetapan SKPD">Buat SKPD</button>
+              <button id="btnNewBill" class="btn" data-ui="button" aria-label="Buat penagihan">Buat Penagihan</button>
+              <button id="btnReconcile" class="btn" data-ui="button" aria-label="Mulai rekonsiliasi">Rekonsiliasi</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="stats" data-ui="stats" aria-label="Statistik ringkas">
+          <div class="card stat" data-ui="card">
+            <div class="stat-k">Kendaraan Terdaftar</div>
+            <div class="stat-v" id="statVehicles">0</div>
+            <div class="stat-hint">Total unit terdata pada periode aktif.</div>
+          </div>
+          <div class="card stat" data-ui="card">
+            <div class="stat-k">SKPD Terbit</div>
+            <div class="stat-v" id="statSKPD">0</div>
+            <div class="stat-hint">Penetapan pajak yang sudah dibuat.</div>
+          </div>
+          <div class="card stat" data-ui="card">
+            <div class="stat-k">Tunggakan</div>
+            <div class="stat-v" id="statArrears">0</div>
+            <div class="stat-hint">Tagihan lewat jatuh tempo.</div>
+          </div>
+          <div class="card stat" data-ui="card">
+            <div class="stat-k">Penerimaan (Mock)</div>
+            <div class="stat-v" id="statRevenue">Rp 0</div>
+            <div class="stat-hint">Akumulasi pembayaran terverifikasi.</div>
+          </div>
+        </section>
+
+        <section class="panel" data-ui="panel" aria-label="Workflow operasional">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">Workflow Operasional</h2>
+              <div class="panel-sub">Pilih langkah untuk melihat form/proses. Semua data bersifat mock agar bisa dipakai untuk uji alur.</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+              <span class="badge" id="activePeriodBadge">Periode: 2025</span>
+              <span class="badge" id="officeBadge">Bapenda Prov. Maluku Utara</span>
+            </div>
+          </div>
+
+          <div id="workflow" data-ui="workflow">
+            <div>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+                <strong>Langkah</strong>
+                <button id="btnResetFlow" class="btn secondary" data-ui="button" aria-label="Reset workflow">Reset</button>
+              </div>
+              <div id="steps" data-ui="steps" aria-label="Daftar langkah workflow"></div>
+            </div>
+
+            <div>
+              <div id="stepContent" data-ui="step-content" aria-label="Konten langkah"></div>
+              <div id="stepActions" data-ui="step-actions" aria-label="Aksi langkah"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" data-ui="panel" aria-label="Monitoring data">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="tableTitle">Monitoring Penagihan & Pembayaran</h2>
+              <div class="panel-sub" id="tableSub">Filter data untuk melihat status penetapan, penagihan, dan pembayaran.</div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+              <button id="btnViewDetail" class="btn" data-ui="button" aria-label="Lihat detail terpilih">Detail</button>
+              <button id="btnBulkAction" class="btn" data-ui="button" aria-label="Aksi massal">Aksi Massal</button>
+            </div>
+          </div>
+
+          <div id="filterBar" data-ui="filter" aria-label="Filter tabel">
+            <div class="control" data-ui="control">
+              <label for="filterStatus">Status</label>
+              <select id="filterStatus" class="select" data-ui="select" aria-label="Filter status">
+                <option value="all">Semua</option>
+                <option value="aktif">Aktif</option>
+                <option value="tunggakan">Tunggakan</option>
+                <option value="dibayar">Dibayar</option>
+                <option value="perlu-validasi">Perlu Validasi</option>
+              </select>
+            </div>
+            <div class="control" data-ui="control">
+              <label for="filterPeriod">Periode</label>
+              <select id="filterPeriod" class="select" data-ui="select" aria-label="Filter periode">
+                <option value="2025" selected>2025</option>
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+              </select>
+            </div>
+            <div class="control" data-ui="control" style="min-width: 240px;">
+              <label for="filterKeyword">Kata kunci</label>
+              <input id="filterKeyword" class="textbox" data-ui="textbox" type="text" placeholder="Mis. DG 1234 XX / 8201... / SKPD..." aria-label="Filter kata kunci" />
+            </div>
+            <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+              <button id="btnApplyFilter" class="btn primary" data-ui="button" aria-label="Terapkan filter">Terapkan</button>
+              <button id="btnClearFilter" class="btn" data-ui="button" aria-label="Bersihkan filter">Bersihkan</button>
+            </div>
+          </div>
+
+          <div class="table-wrap" aria-label="Tabel data" role="region">
+            <table id="dataTable" data-ui="table" aria-label="Tabel monitoring">
+              <thead>
+                <tr>
+                  <th>NPOL</th>
+                  <th>Wajib Pajak</th>
+                  <th>Objek</th>
+                  <th>SKPD</th>
+                  <th>Jatuh Tempo</th>
+                  <th>Status</th>
+                  <th>Tagihan</th>
+                  <th>Pembayaran</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <footer id="footer" data-ui="footer">
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+      <div>
+        <strong>Prototype eSamsat</strong> — Bapenda Provinsi Maluku Utara. Data bersifat simulasi untuk uji alur UI/UX.
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span class="badge">Aksesibilitas: Fokus terlihat</span>
+        <span class="badge">Tanpa library eksternal</span>
+      </div>
+    </div>
+  </footer>
+
+  <div id="modal" data-ui="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Dialog">
+    <div class="modal-card" role="document">
+      <div class="modal-head">
+        <h3 class="modal-title" id="modalTitle">Modal</h3>
+        <button id="btnCloseModal" class="btn secondary" data-ui="button" aria-label="Tutup dialog">Tutup</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ------------------------------
+    // Mock Data
+    // ------------------------------
+    const MOCK_DB = {
+      vehicles: [
+        { nopol: 'DG 1234 MU', jenis: 'Roda 2', merk: 'Yamaha', model: 'NMAX', tahun: 2022, nrkb: '820101220001', nik: '8201011200000001', nama: 'Rizal Umar', alamat: 'Ternate Tengah', pokok: 520000, denda: 25000, periode: '2025', jatuhTempo: '2025-02-12', skpd: 'SKPD-2025-00091', status: 'tunggakan', bayar: { status: 'belum', ntpd: '', tanggal: '' } },
+        { nopol: 'DG 9087 AB', jenis: 'Roda 4', merk: 'Toyota', model: 'Avanza', tahun: 2019, nrkb: '820102190087', nik: '8201021300000002', nama: 'Siti Rahayu', alamat: 'Tidore', pokok: 1750000, denda: 0, periode: '2025', jatuhTempo: '2025-11-22', skpd: 'SKPD-2025-00310', status: 'aktif', bayar: { status: 'belum', ntpd: '', tanggal: '' } },
+        { nopol: 'DG 4455 ZX', jenis: 'Roda 4', merk: 'Daihatsu', model: 'Terios', tahun: 2020, nrkb: '820104200155', nik: '8201041400000003', nama: 'Hendra Latu', alamat: 'Sofifi', pokok: 1920000, denda: 120000, periode: '2025', jatuhTempo: '2025-04-08', skpd: 'SKPD-2025-00140', status: 'perlu-validasi', bayar: { status: 'pending', ntpd: 'NTPD-9A1X7K', tanggal: '2025-04-08' } },
+        { nopol: 'DG 7001 RT', jenis: 'Roda 2', merk: 'Honda', model: 'Vario', tahun: 2021, nrkb: '820103210071', nik: '8201031500000004', nama: 'Nur Hidayah', alamat: 'Halmahera Barat', pokok: 410000, denda: 0, periode: '2025', jatuhTempo: '2025-01-30', skpd: 'SKPD-2025-00055', status: 'dibayar', bayar: { status: 'ok', ntpd: 'NTPD-5K2P1M', tanggal: '2025-01-25' } },
+        { nopol: 'DG 3310 UU', jenis: 'Roda 4', merk: 'Suzuki', model: 'Ertiga', tahun: 2018, nrkb: '820105180310', nik: '8201051600000005', nama: 'Fahri Hasan', alamat: 'Morotai', pokok: 1680000, denda: 210000, periode: '2024', jatuhTempo: '2024-12-18', skpd: 'SKPD-2024-00980', status: 'tunggakan', bayar: { status: 'belum', ntpd: '', tanggal: '' } }
+      ],
+      bills: [
+        { id: 'TAG-2025-00031', nopol: 'DG 1234 MU', tipe: 'Surat Tagihan', kanal: 'SMS/WA', status: 'terkirim', tanggal: '2025-02-15' },
+        { id: 'TAG-2025-00122', nopol: 'DG 4455 ZX', tipe: 'Reminder Validasi', kanal: 'Email', status: 'terkirim', tanggal: '2025-04-09' },
+        { id: 'TAG-2024-00440', nopol: 'DG 3310 UU', tipe: 'Teguran', kanal: 'Surat', status: 'diproses', tanggal: '2025-01-03' }
+      ],
+      payments: [
+        { ntpd: 'NTPD-5K2P1M', nopol: 'DG 7001 RT', jumlah: 410000, tanggal: '2025-01-25', status: 'terverifikasi', bank: 'Bank Malut' },
+        { ntpd: 'NTPD-9A1X7K', nopol: 'DG 4455 ZX', jumlah: 2040000, tanggal: '2025-04-08', status: 'menunggu-validasi', bank: 'Bank Malut' }
+      ],
+      reconciliations: [
+        { id: 'REK-2025-0004', tanggal: '2025-04-10', kanal: 'Host-to-Host', status: 'draft', catatan: 'Cocokkan NTPD pending.' }
+      ]
+    };
+
+    // ------------------------------
+    // State
+    // ------------------------------
+    const state = {
+      role: 'petugas',
+      activeModule: 'dashboard',
+      activeStep: 'data',
+      selectedNopol: null,
+      filters: { status: 'all', period: '2025', keyword: '' }
+    };
+
+    const MODULES = [
+      { id: 'dashboard', label: 'Dashboard', meta: 'Ringkasan & monitoring' },
+      { id: 'data', label: 'Data Kendaraan & WP', meta: 'Pencarian + verifikasi' },
+      { id: 'penetapan', label: 'Penetapan (SKPD)', meta: 'Buat & revisi SKPD' },
+      { id: 'penagihan', label: 'Penagihan', meta: 'Tagihan + tunggakan' },
+      { id: 'pembayaran', label: 'Pembayaran & Validasi', meta: 'NTPD + verifikasi' },
+      { id: 'rekonsiliasi', label: 'Rekonsiliasi', meta: 'Cocokkan bank' },
+      { id: 'laporan', label: 'Laporan & Export', meta: 'Rekap + unduh' }
+    ];
+
+    const STEPS = [
+      { id: 'data', title: '1) Data Kendaraan & Wajib Pajak', desc: 'Cari Nopol/NIK, cek objek & identitas.' },
+      { id: 'penetapan', title: '2) Penetapan (SKPD)', desc: 'Hitung pokok/denda, terbitkan SKPD.' },
+      { id: 'penagihan', title: '3) Penagihan', desc: 'Reminder, surat teguran, monitoring tunggakan.' },
+      { id: 'pembayaran', title: '4) Pembayaran & Validasi', desc: 'Input NTPD, validasi status pembayaran.' },
+      { id: 'rekonsiliasi', title: '5) Rekonsiliasi', desc: 'Cocokkan transaksi bank dan kas daerah.' },
+      { id: 'laporan', title: '6) Laporan & Export', desc: 'Rekap penerimaan, tunggakan, performa.' }
+    ];
+
+    // ------------------------------
+    // Helpers
+    // ------------------------------
+    function rupiah(n){
+      const x = Number(n || 0);
+      return 'Rp ' + x.toLocaleString('id-ID');
+    }
+
+    function todayISO(){
+      const d = new Date();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+
+    function statusBadge(status){
+      const s = String(status || '').toLowerCase();
+      if (s === 'dibayar') return '<span class="badge ok">Dibayar</span>';
+      if (s === 'tunggakan') return '<span class="badge danger">Tunggakan</span>';
+      if (s === 'perlu-validasi') return '<span class="badge warn">Perlu Validasi</span>';
+      return '<span class="badge">Aktif</span>';
+    }
+
+    function paymentBadge(pay){
+      if (!pay || !pay.status) return '<span class="badge">Belum</span>';
+      const s = String(pay.status).toLowerCase();
+      if (s === 'ok') return '<span class="badge ok">Terverifikasi</span>';
+      if (s === 'pending') return '<span class="badge warn">Pending</span>';
+      return '<span class="badge">Belum</span>';
+    }
+
+    // ------------------------------
+    // Render
+    // ------------------------------
+    function renderMenu(){
+      const menu = document.getElementById('menu');
+      if (!menu) return;
+      menu.innerHTML = '';
+
+      MODULES.forEach(m => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'menu-item' + (state.activeModule === m.id ? ' active' : '');
+        btn.setAttribute('data-ui', 'menu-item');
+        btn.setAttribute('aria-label', 'Buka modul ' + m.label);
+        btn.dataset.module = m.id;
+        btn.innerHTML = '<span><strong>' + m.label + '</strong><div class="meta">' + m.meta + '</div></span>' +
+                        '<span class="badge">' + (m.id === 'dashboard' ? 'Home' : 'Modul') + '</span>';
+        menu.appendChild(btn);
+      });
+    }
+
+    function renderDashboard(){
+      // Hero
+      const heroTitle = document.getElementById('heroTitle');
+      const heroDesc = document.getElementById('heroDesc');
+      const tableTitle = document.getElementById('tableTitle');
+      const tableSub = document.getElementById('tableSub');
+
+      const moduleInfo = MODULES.find(x => x.id === state.activeModule) || MODULES[0];
+
+      if (heroTitle) heroTitle.textContent = moduleInfo.label;
+      if (heroDesc){
+        const roleHint = state.role === 'wajibpajak'
+          ? 'Mode Wajib Pajak: cek status pajak, lihat tagihan, dan validasi pembayaran.'
+          : 'Mode Petugas: kelola penetapan, penagihan, validasi, rekonsiliasi, dan laporan.';
+        heroDesc.textContent = roleHint + ' Gunakan workflow untuk simulasi proses end-to-end.';
+      }
+
+      if (tableTitle){
+        const titles = {
+          dashboard: 'Monitoring Penagihan & Pembayaran',
+          data: 'Daftar Kendaraan & Wajib Pajak',
+          penetapan: 'Daftar SKPD & Penetapan',
+          penagihan: 'Daftar Penagihan & Tunggakan',
+          pembayaran: 'Daftar Pembayaran & Validasi',
+          rekonsiliasi: 'Daftar Rekonsiliasi',
+          laporan: 'Dataset Laporan (Mock)'
+        };
+        tableTitle.textContent = titles[state.activeModule] || titles.dashboard;
+      }
+      if (tableSub){
+        const subs = {
+          dashboard: 'Filter data untuk melihat status penetapan, penagihan, dan pembayaran.',
+          data: 'Cari Nopol/NIK untuk verifikasi objek pajak dan identitas wajib pajak.',
+          penetapan: 'Terbitkan SKPD, koreksi komponen pokok/denda, dan simpan draft.',
+          penagihan: 'Kirim reminder/teguran dan pantau tunggakan berdasarkan jatuh tempo.',
+          pembayaran: 'Input NTPD/kanal bank untuk validasi dan konfirmasi penerimaan.',
+          rekonsiliasi: 'Cocokkan pembayaran bank dengan transaksi yang tercatat di sistem.',
+          laporan: 'Preview dataset dan lakukan export (stub) untuk rekap penerimaan dan tunggakan.'
+        };
+        tableSub.textContent = subs[state.activeModule] || subs.dashboard;
+      }
+
+      renderSteps();
+      renderStepContent(state.activeStep);
+      renderTable();
+      updateStats();
+    }
+
+    function renderSteps(){
+      const steps = document.getElementById('steps');
+      if (!steps) return;
+      steps.innerHTML = '';
+
+      STEPS.forEach(s => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'step' + (state.activeStep === s.id ? ' active' : '');
+        btn.setAttribute('data-ui', 'step');
+        btn.dataset.step = s.id;
+        btn.setAttribute('aria-label', 'Buka langkah ' + s.title);
+        btn.innerHTML = '<div class="t">' + s.title + '</div><div class="d">' + s.desc + '</div>';
+        steps.appendChild(btn);
+      });
+    }
+
+    function renderStepContent(stepId){
+      const box = document.getElementById('stepContent');
+      const actions = document.getElementById('stepActions');
+      if (!box || !actions) return;
+
+      const selected = state.selectedNopol
+        ? MOCK_DB.vehicles.find(v => v.nopol === state.selectedNopol)
+        : null;
+
+      const selectedLine = selected
+        ? '<div style="margin-top:10px;">Terpilih: <span class="badge">' + selected.nopol + '</span> <span class="badge">' + selected.nama + '</span></div>'
+        : '<div style="margin-top:10px; color: rgba(185,196,226,.9);">Belum ada pilihan. Klik baris tabel atau cari via kotak pencarian.</div>';
+
+      const baseIntro = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">' +
+        '<div><strong>Simulasi Langkah:</strong> <span class="badge">' + (STEPS.find(s=>s.id===stepId)?.title || stepId) + '</span></div>' +
+        '<div><span class="badge">Hari ini: ' + todayISO() + '</span></div>' +
+      '</div>' + selectedLine;
+
+      let html = '';
+      let actHtml = '';
+
+      if (stepId === 'data'){
+        html = baseIntro +
+          '<div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfNopol">NPOL</label>' +
+              '<input id="wfNopol" class="textbox" data-ui="textbox" type="text" placeholder="DG 1234 MU" value="' + (selected ? selected.nopol : '') + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfNik">NIK</label>' +
+              '<input id="wfNik" class="textbox" data-ui="textbox" type="text" placeholder="8201..." value="' + (selected ? selected.nik : '') + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfNama">Nama Wajib Pajak</label>' +
+              '<input id="wfNama" class="textbox" data-ui="textbox" type="text" placeholder="Nama" value="' + (selected ? selected.nama : '') + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfAlamat">Alamat</label>' +
+              '<input id="wfAlamat" class="textbox" data-ui="textbox" type="text" placeholder="Kecamatan/Kabupaten" value="' + (selected ? selected.alamat : '') + '" />' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px; color: rgba(185,196,226,.9); font-size:13px; line-height:1.5;">' +
+            'Tujuan langkah ini: memastikan identitas wajib pajak dan objek kendaraan benar sebelum penetapan.' +
+          '</div>';
+
+        actHtml = '<button class="btn primary" data-ui="button" id="actLookup">Cari & Validasi</button>' +
+                  '<button class="btn" data-ui="button" id="actToPenetapan">Lanjut ke Penetapan</button>';
+      }
+
+      if (stepId === 'penetapan'){
+        const pokok = selected ? selected.pokok : 0;
+        const denda = selected ? selected.denda : 0;
+        html = baseIntro +
+          '<div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfSkpd">No. SKPD</label>' +
+              '<input id="wfSkpd" class="textbox" data-ui="textbox" type="text" placeholder="SKPD-2025-xxxxx" value="' + (selected ? selected.skpd : '') + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfPokok">Pokok PKB</label>' +
+              '<input id="wfPokok" class="textbox" data-ui="textbox" type="number" min="0" value="' + pokok + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfDenda">Denda</label>' +
+              '<input id="wfDenda" class="textbox" data-ui="textbox" type="number" min="0" value="' + denda + '" />' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">' +
+            '<span class="badge">Total: <strong id="wfTotal">' + rupiah(pokok + denda) + '</strong></span>' +
+            '<span class="badge">Periode: <strong>' + (selected ? selected.periode : state.filters.period) + '</strong></span>' +
+            '<span class="badge">Jatuh Tempo: <strong>' + (selected ? selected.jatuhTempo : '-') + '</strong></span>' +
+          '</div>' +
+          '<div style="margin-top:12px; color: rgba(185,196,226,.9); font-size:13px; line-height:1.5;">' +
+            'Terbitkan SKPD untuk dasar penagihan. Pada sistem nyata, perhitungan komponen mengacu ketentuan yang berlaku.' +
+          '</div>';
+
+        actHtml = '<button class="btn primary" data-ui="button" id="actIssueSkpd">Terbitkan SKPD</button>' +
+                  '<button class="btn" data-ui="button" id="actToPenagihan">Lanjut ke Penagihan</button>';
+      }
+
+      if (stepId === 'penagihan'){
+        html = baseIntro +
+          '<div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfTagType">Jenis Penagihan</label>' +
+              '<select id="wfTagType" class="select" data-ui="select">' +
+                '<option>Reminder</option><option>Surat Tagihan</option><option>Teguran</option><option>Penagihan Lapangan</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfChannel">Kanal</label>' +
+              '<select id="wfChannel" class="select" data-ui="select">' +
+                '<option>SMS/WA</option><option>Email</option><option>Surat</option><option>Aplikasi</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfDue">Tanggal Jatuh Tempo</label>' +
+              '<input id="wfDue" class="textbox" data-ui="textbox" type="date" value="' + (selected ? selected.jatuhTempo : '') + '" />' +
+            '</div>' +
+          '</div>' +
+          '<div class="control" data-ui="control" style="margin-top:12px;">' +
+            '<label for="wfNote">Catatan</label>' +
+            '<textarea id="wfNote" class="memo" data-ui="memo" rows="3" placeholder="Mis. Tunggakan > 30 hari, minta konfirmasi pembayaran."></textarea>' +
+          '</div>' +
+          '<div style="margin-top:12px; color: rgba(185,196,226,.9); font-size:13px; line-height:1.5;">' +
+            'Sistem akan membuat record penagihan dan menandai status terkirim/diproses (mock).' +
+          '</div>';
+
+        actHtml = '<button class="btn primary" data-ui="button" id="actSendBill">Kirim Penagihan</button>' +
+                  '<button class="btn" data-ui="button" id="actToPay">Lanjut ke Pembayaran</button>';
+      }
+
+      if (stepId === 'pembayaran'){
+        const ntpd = selected ? (selected.bayar?.ntpd || '') : '';
+        html = baseIntro +
+          '<div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfNtpd">NTPD</label>' +
+              '<input id="wfNtpd" class="textbox" data-ui="textbox" type="text" placeholder="NTPD-XXXXXX" value="' + ntpd + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfBank">Kanal/Bank</label>' +
+              '<select id="wfBank" class="select" data-ui="select">' +
+                '<option>Bank Malut</option><option>Channel Lain (Mock)</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfPayDate">Tanggal Bayar</label>' +
+              '<input id="wfPayDate" class="textbox" data-ui="textbox" type="date" value="' + (selected && selected.bayar?.tanggal ? selected.bayar.tanggal : todayISO()) + '" />' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">' +
+            '<span class="badge">Status Saat Ini: ' + statusBadge(selected ? selected.status : 'aktif') + '</span>' +
+            '<span class="badge">Pembayaran: ' + paymentBadge(selected ? selected.bayar : null) + '</span>' +
+          '</div>' +
+          '<div style="margin-top:12px; color: rgba(185,196,226,.9); font-size:13px; line-height:1.5;">' +
+            'Validasi pembayaran mensimulasikan perubahan status menjadi Dibayar atau Perlu Validasi.' +
+          '</div>';
+
+        actHtml = '<button class="btn primary" data-ui="button" id="actValidate">Validasi NTPD</button>' +
+                  '<button class="btn" data-ui="button" id="actToRek">Lanjut ke Rekonsiliasi</button>';
+      }
+
+      if (stepId === 'rekonsiliasi'){
+        const rec = MOCK_DB.reconciliations[0];
+        html = baseIntro +
+          '<div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfRecId">ID Rekonsiliasi</label>' +
+              '<input id="wfRecId" class="textbox" data-ui="textbox" type="text" value="' + (rec ? rec.id : 'REK-2025-XXXX') + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfRecDate">Tanggal</label>' +
+              '<input id="wfRecDate" class="textbox" data-ui="textbox" type="date" value="' + (rec ? rec.tanggal : todayISO()) + '" />' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfRecChannel">Kanal</label>' +
+              '<select id="wfRecChannel" class="select" data-ui="select">' +
+                '<option>Host-to-Host</option><option>Manual Upload</option><option>API Batch</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="control" data-ui="control" style="margin-top:12px;">' +
+            '<label for="wfRecNote">Catatan</label>' +
+            '<textarea id="wfRecNote" class="memo" data-ui="memo" rows="3" placeholder="Catatan rekonsiliasi">' + (rec ? rec.catatan : '') + '</textarea>' +
+          '</div>' +
+          '<div style="margin-top:12px; color: rgba(185,196,226,.9); font-size:13px; line-height:1.5;">' +
+            'Rekonsiliasi mencocokkan daftar pembayaran dengan data bank. Prototype ini menampilkan ringkas dan hasil simulasi.' +
+          '</div>';
+
+        actHtml = '<button class="btn primary" data-ui="button" id="actRunRec">Jalankan Rekonsiliasi</button>' +
+                  '<button class="btn" data-ui="button" id="actToLap">Lanjut ke Laporan</button>';
+      }
+
+      if (stepId === 'laporan'){
+        html = baseIntro +
+          '<div style="margin-top:14px; display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfRepType">Jenis Laporan</label>' +
+              '<select id="wfRepType" class="select" data-ui="select">' +
+                '<option>Rekap Penerimaan</option><option>Rekap Tunggakan</option><option>Kinerja Penagihan</option><option>Daftar SKPD</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="control" data-ui="control">' +
+              '<label for="wfRepFmt">Format</label>' +
+              '<select id="wfRepFmt" class="select" data-ui="select">' +
+                '<option>CSV (Stub)</option><option>Excel (Stub)</option><option>PDF (Stub)</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px; color: rgba(185,196,226,.9); font-size:13px; line-height:1.5;">' +
+            'Export di prototype hanya menampilkan dialog ringkasan. Pada implementasi nyata, export menghasilkan file resmi.' +
+          '</div>';
+
+        actHtml = '<button class="btn primary" data-ui="button" id="actExportNow">Export (Stub)</button>' +
+                  '<button class="btn" data-ui="button" id="actFinish">Selesai</button>';
+      }
+
+      box.innerHTML = html;
+      actions.innerHTML = actHtml;
+
+      // Bind step-specific actions (safe)
+      bindStepActions(stepId);
+    }
+
+    function renderTable(){
+      const body = document.getElementById('tableBody');
+      if (!body) return;
+      body.innerHTML = '';
+
+      let rows = [];
+
+      if (state.activeModule === 'rekonsiliasi'){
+        // Render reconciliation rows
+        const recs = MOCK_DB.reconciliations.slice();
+        recs.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td colspan="2"><strong>' + r.id + '</strong></td>' +
+                         '<td colspan="2">Kanal: ' + r.kanal + '</td>' +
+                         '<td>' + r.tanggal + '</td>' +
+                         '<td>' + statusBadge(r.status === 'draft' ? 'perlu-validasi' : 'dibayar') + '</td>' +
+                         '<td colspan="2">' + (r.catatan || '-') + '</td>';
+          body.appendChild(tr);
+        });
+        return;
+      }
+
+      if (state.activeModule === 'laporan'){
+        // Render simple dataset preview
+        const v = filterVehicles();
+        v.forEach(it => {
+          const total = (it.pokok || 0) + (it.denda || 0);
+          const paid = it.bayar?.status === 'ok';
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + it.nopol + '</td>' +
+                         '<td><strong>' + it.nama + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">NIK: ' + it.nik + '</div></td>' +
+                         '<td>' + it.merk + ' ' + it.model + ' (' + it.tahun + ')</td>' +
+                         '<td>' + it.skpd + '</td>' +
+                         '<td>' + it.jatuhTempo + '</td>' +
+                         '<td>' + statusBadge(it.status) + '</td>' +
+                         '<td><strong>' + rupiah(total) + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">Pokok ' + rupiah(it.pokok) + ' + Denda ' + rupiah(it.denda) + '</div></td>' +
+                         '<td>' + (paid ? ('<div><strong>' + (it.bayar?.ntpd || '-') + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">' + (it.bayar?.tanggal || '-') + '</div></div>') : '-') + '</td>';
+          tr.dataset.nopol = it.nopol;
+          rows.push(tr);
+          body.appendChild(tr);
+        });
+        bindRowSelection(rows);
+        return;
+      }
+
+      const vehicles = filterVehicles();
+      vehicles.forEach(it => {
+        const total = (it.pokok || 0) + (it.denda || 0);
+        const tr = document.createElement('tr');
+        tr.dataset.nopol = it.nopol;
+        tr.innerHTML =
+          '<td><strong>' + it.nopol + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">NRKB: ' + it.nrkb + '</div></td>' +
+          '<td><strong>' + it.nama + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">NIK: ' + it.nik + '</div></td>' +
+          '<td>' + it.merk + ' ' + it.model + '<div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">' + it.jenis + ' • Tahun ' + it.tahun + '</div></td>' +
+          '<td>' + (it.skpd || '-') + '</td>' +
+          '<td>' + it.jatuhTempo + '</td>' +
+          '<td>' + statusBadge(it.status) + '</td>' +
+          '<td><strong>' + rupiah(total) + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">Pokok ' + rupiah(it.pokok) + ' + Denda ' + rupiah(it.denda) + '</div></td>' +
+          '<td>' + (it.bayar?.ntpd ? ('<div><strong>' + it.bayar.ntpd + '</strong><div style="color:rgba(185,196,226,.86); font-size:12px; margin-top:4px;">' + (it.bayar.tanggal || '-') + '</div></div>') : '-') +
+          '<div style="margin-top:6px;">' + paymentBadge(it.bayar) + '</div></td>';
+        rows.push(tr);
+        body.appendChild(tr);
+      });
+
+      bindRowSelection(rows);
+    }
+
+    function bindRowSelection(rows){
+      rows.forEach(tr => {
+        tr.tabIndex = 0;
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', () => {
+          state.selectedNopol = tr.dataset.nopol || null;
+          renderStepContent(state.activeStep);
+          highlightSelectedRow();
+        });
+        tr.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' '){
+            e.preventDefault();
+            state.selectedNopol = tr.dataset.nopol || null;
+            renderStepContent(state.activeStep);
+            highlightSelectedRow();
+          }
+        });
+      });
+      highlightSelectedRow();
+    }
+
+    function highlightSelectedRow(){
+      const body = document.getElementById('tableBody');
+      if (!body) return;
+      [...body.querySelectorAll('tr')].forEach(tr => {
+        if (state.selectedNopol && tr.dataset.nopol === state.selectedNopol){
+          tr.style.outline = '2px solid rgba(79,140,255,.55)';
+          tr.style.outlineOffset = '-2px';
+          tr.style.borderRadius = '10px';
+        } else {
+          tr.style.outline = 'none';
+        }
+      });
+    }
+
+    function filterVehicles(){
+      const { status, period, keyword } = state.filters;
+      const kw = String(keyword || '').trim().toLowerCase();
+
+      return MOCK_DB.vehicles.filter(v => {
+        if (period && v.periode !== period) return false;
+
+        if (status && status !== 'all'){
+          if (status === 'aktif' && v.status !== 'aktif') return false;
+          if (status === 'tunggakan' && v.status !== 'tunggakan') return false;
+          if (status === 'dibayar' && v.status !== 'dibayar') return false;
+          if (status === 'perlu-validasi' && v.status !== 'perlu-validasi') return false;
+        }
+
+        if (kw){
+          const hay = [v.nopol, v.nik, v.nama, v.skpd, v.nrkb, (v.bayar?.ntpd || '')].join(' ').toLowerCase();
+          if (!hay.includes(kw)) return false;
+        }
+
+        // Role filter (simple): wajib pajak hanya lihat milik sendiri (mock by nik prefix)
+        if (state.role === 'wajibpajak'){
+          // Simulasi: wajib pajak hanya melihat 2 record pertama
+          const allow = ['DG 1234 MU','DG 7001 RT'];
+          if (!allow.includes(v.nopol)) return false;
+        }
+
+        return true;
+      });
+    }
+
+    // ------------------------------
+    // Actions
+    // ------------------------------
+    function goToStep(stepId){
+      state.activeStep = stepId;
+      renderSteps();
+      renderStepContent(stepId);
+    }
+
+    function updateStats(){
+      const vehicles = filterVehicles();
+      const statVehicles = document.getElementById('statVehicles');
+      const statSKPD = document.getElementById('statSKPD');
+      const statArrears = document.getElementById('statArrears');
+      const statRevenue = document.getElementById('statRevenue');
+      const lateCountBadge = document.getElementById('lateCountBadge');
+
+      const skpdCount = vehicles.filter(v => !!v.skpd).length;
+      const arrearsCount = vehicles.filter(v => v.status === 'tunggakan').length;
+
+      const revenue = vehicles.reduce((acc, v) => {
+        if (v.bayar?.status === 'ok') return acc + (v.pokok || 0) + (v.denda || 0);
+        return acc;
+      }, 0);
+
+      if (statVehicles) statVehicles.textContent = String(vehicles.length);
+      if (statSKPD) statSKPD.textContent = String(skpdCount);
+      if (statArrears) statArrears.textContent = String(arrearsCount);
+      if (statRevenue) statRevenue.textContent = rupiah(revenue);
+
+      if (lateCountBadge) lateCountBadge.textContent = arrearsCount + ' Tunggakan';
+    }
+
+    function filterTable(){
+      const status = document.getElementById('filterStatus');
+      const period = document.getElementById('filterPeriod');
+      const keyword = document.getElementById('filterKeyword');
+      state.filters.status = status ? status.value : 'all';
+      state.filters.period = period ? period.value : '2025';
+      state.filters.keyword = keyword ? keyword.value : '';
+      renderTable();
+      updateStats();
+    }
+
+    function bindStepActions(stepId){
+      // Guard: bind only if buttons exist
+      const byId = (id) => document.getElementById(id);
+
+      const actLookup = byId('actLookup');
+      if (actLookup){
+        actLookup.addEventListener('click', () => {
+          const nopol = (byId('wfNopol')?.value || '').trim().toUpperCase();
+          const nik = (byId('wfNik')?.value || '').trim();
+          const found = MOCK_DB.vehicles.find(v => v.nopol === nopol || v.nik === nik);
+          if (found){
+            state.selectedNopol = found.nopol;
+            openModal('Hasil Pencarian',
+              '<p>Data ditemukan untuk <strong>' + found.nopol + '</strong> atas nama <strong>' + found.nama + '</strong>.</p>' +
+              '<p>Status: ' + statusBadge(found.status) + '</p>' +
+              '<p>SKPD: <strong>' + (found.skpd || '-') + '</strong> • Jatuh tempo: <strong>' + found.jatuhTempo + '</strong></p>'
+            );
+          } else {
+            openModal('Hasil Pencarian', '<p>Data tidak ditemukan pada mock database. Coba kata kunci lain.</p>');
+          }
+          renderTable();
+          renderStepContent('data');
+        });
+      }
+
+      const actToPenetapan = byId('actToPenetapan');
+      if (actToPenetapan) actToPenetapan.addEventListener('click', () => goToStep('penetapan'));
+
+      const actIssueSkpd = byId('actIssueSkpd');
+      if (actIssueSkpd){
+        actIssueSkpd.addEventListener('click', () => {
+          if (!state.selectedNopol){
+            openModal('Terbitkan SKPD', '<p>Pilih dulu kendaraan di tabel agar SKPD bisa diterbitkan.</p>');
+            return;
+          }
+          const v = MOCK_DB.vehicles.find(x => x.nopol === state.selectedNopol);
+          const pokok = Number(byId('wfPokok')?.value || v.pokok || 0);
+          const denda = Number(byId('wfDenda')?.value || v.denda || 0);
+          const skpd = (byId('wfSkpd')?.value || v.skpd || '').trim();
+          v.pokok = pokok; v.denda = denda; v.skpd = skpd || ('SKPD-' + state.filters.period + '-' + String(Math.floor(Math.random()*90000)+10000));
+          v.status = (v.status === 'dibayar') ? 'dibayar' : 'aktif';
+          openModal('SKPD Diterbitkan',
+            '<p>SKPD untuk <strong>' + v.nopol + '</strong> tersimpan.</p>' +
+            '<p>No. SKPD: <strong>' + v.skpd + '</strong></p>' +
+            '<p>Total Tagihan: <strong>' + rupiah(v.pokok + v.denda) + '</strong></p>'
+          );
+          renderTable();
+          updateStats();
+        });
+      }
+
+      const actToPenagihan = byId('actToPenagihan');
+      if (actToPenagihan) actToPenagihan.addEventListener('click', () => goToStep('penagihan'));
+
+      const actSendBill = byId('actSendBill');
+      if (actSendBill){
+        actSendBill.addEventListener('click', () => {
+          if (!state.selectedNopol){
+            openModal('Kirim Penagihan', '<p>Pilih dulu kendaraan di tabel untuk membuat record penagihan.</p>');
+            return;
+          }
+          const tipe = byId('wfTagType')?.value || 'Reminder';
+          const kanal = byId('wfChannel')?.value || 'SMS/WA';
+          const id = 'TAG-' + state.filters.period + '-' + String(Math.floor(Math.random()*900)+100).padStart(5,'0');
+          MOCK_DB.bills.unshift({ id, nopol: state.selectedNopol, tipe, kanal, status: 'terkirim', tanggal: todayISO() });
+          openModal('Penagihan Dibuat',
+            '<p>Record penagihan berhasil dibuat.</p>' +
+            '<p>ID: <strong>' + id + '</strong> • Tipe: <strong>' + tipe + '</strong> • Kanal: <strong>' + kanal + '</strong></p>'
+          );
+          renderTable();
+        });
+      }
+
+      const actToPay = byId('actToPay');
+      if (actToPay) actToPay.addEventListener('click', () => goToStep('pembayaran'));
+
+      const actValidate = byId('actValidate');
+      if (actValidate){
+        actValidate.addEventListener('click', () => {
+          if (!state.selectedNopol){
+            openModal('Validasi Pembayaran', '<p>Pilih dulu kendaraan di tabel untuk validasi pembayaran.</p>');
+            return;
+          }
+          const v = MOCK_DB.vehicles.find(x => x.nopol === state.selectedNopol);
+          const ntpd = (byId('wfNtpd')?.value || '').trim();
+          const tanggal = byId('wfPayDate')?.value || todayISO();
+          const bank = byId('wfBank')?.value || 'Bank Malut';
+
+          if (!ntpd){
+            openModal('Validasi Pembayaran', '<p>Isi NTPD terlebih dahulu.</p>');
+            return;
+          }
+
+          // Simulasi validasi: jika NTPD mengandung "9" => pending, selain itu verifikasi
+          const pending = ntpd.includes('9');
+          v.bayar = { status: pending ? 'pending' : 'ok', ntpd, tanggal };
+          v.status = pending ? 'perlu-validasi' : 'dibayar';
+
+          // Simpan payment record
+          MOCK_DB.payments.unshift({ ntpd, nopol: v.nopol, jumlah: (v.pokok||0)+(v.denda||0), tanggal, status: pending ? 'menunggu-validasi' : 'terverifikasi', bank });
+
+          openModal('Hasil Validasi',
+            '<p>Validasi untuk <strong>' + v.nopol + '</strong> selesai.</p>' +
+            '<p>NTPD: <strong>' + ntpd + '</strong> • Status: ' + (pending ? '<span class="badge warn">Menunggu</span>' : '<span class="badge ok">Terverifikasi</span>') + '</p>'
+          );
+          renderTable();
+          updateStats();
+          renderStepContent('pembayaran');
+        });
+      }
+
+      const actToRek = byId('actToRek');
+      if (actToRek) actToRek.addEventListener('click', () => goToStep('rekonsiliasi'));
+
+      const actRunRec = byId('actRunRec');
+      if (actRunRec){
+        actRunRec.addEventListener('click', () => {
+          const pending = MOCK_DB.payments.filter(p => p.status === 'menunggu-validasi').length;
+          const ok = MOCK_DB.payments.filter(p => p.status === 'terverifikasi').length;
+          openModal('Rekonsiliasi (Mock)',
+            '<p>Ringkasan hasil rekonsiliasi:</p>' +
+            '<ul>' +
+              '<li>Terverifikasi: <strong>' + ok + '</strong></li>' +
+              '<li>Perlu tindak lanjut: <strong>' + pending + '</strong></li>' +
+            '</ul>' +
+            '<p>Langkah berikutnya: tindak lanjuti transaksi pending dan sinkronkan ke kas daerah.</p>'
+          );
+          // Update record status (mock)
+          if (MOCK_DB.reconciliations[0]) MOCK_DB.reconciliations[0].status = pending > 0 ? 'draft' : 'final';
+          renderTable();
+        });
+      }
+
+      const actToLap = byId('actToLap');
+      if (actToLap) actToLap.addEventListener('click', () => goToStep('laporan'));
+
+      const actExportNow = byId('actExportNow');
+      if (actExportNow){
+        actExportNow.addEventListener('click', () => {
+          openModal('Export (Stub)',
+            '<p>Simulasi export berhasil dibuat (tanpa file).</p>' +
+            '<p>Jenis laporan: <strong>' + (byId('wfRepType')?.value || '-') + '</strong></p>' +
+            '<p>Format: <strong>' + (byId('wfRepFmt')?.value || '-') + '</strong></p>'
+          );
+        });
+      }
+
+      const actFinish = byId('actFinish');
+      if (actFinish){
+        actFinish.addEventListener('click', () => {
+          openModal('Selesai', '<p>Workflow selesai. Kamu bisa kembali ke langkah lain atau ganti modul dari sidebar.</p>');
+        });
+      }
+
+      // Recalc total on penetapan inputs
+      if (stepId === 'penetapan'){
+        const pok = byId('wfPokok');
+        const den = byId('wfDenda');
+        const tot = byId('wfTotal');
+        const recalc = () => {
+          const p = Number(pok?.value || 0);
+          const d = Number(den?.value || 0);
+          if (tot) tot.textContent = rupiah(p + d);
+        };
+        if (pok) pok.addEventListener('input', recalc);
+        if (den) den.addEventListener('input', recalc);
+      }
+    }
+
+    // ------------------------------
+    // Modal (stubs are real)
+    // ------------------------------
+    function openModal(title, bodyHtml){
+      const modal = document.getElementById('modal');
+      const t = document.getElementById('modalTitle');
+      const b = document.getElementById('modalBody');
+      if (!modal || !t || !b) return;
+      t.textContent = title || 'Dialog';
+      b.innerHTML = bodyHtml || '';
+      modal.setAttribute('aria-hidden', 'false');
+
+      // Focus management
+      const closeBtn = document.getElementById('btnCloseModal');
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closeModal(){
+      const modal = document.getElementById('modal');
+      if (!modal) return;
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function applyTheme(){ /* stub aman (opsional) */ }
+
+    // ------------------------------
+    // UI bindings
+    // ------------------------------
+    function toggleSidebar(force){
+      const open = document.body.classList.contains('sidebar-open');
+      const next = (typeof force === 'boolean') ? force : !open;
+      if (next) document.body.classList.add('sidebar-open');
+      else document.body.classList.remove('sidebar-open');
+    }
+
+    function bindUI(){
+      // Wrap in try/catch as lightweight error fallback
+      try {
+        const btnSidebar = document.getElementById('btnSidebar');
+        const btnCloseSidebar = document.getElementById('btnCloseSidebar');
+        const menu = document.getElementById('menu');
+
+        const btnResetFlow = document.getElementById('btnResetFlow');
+        const btnCloseModal = document.getElementById('btnCloseModal');
+
+        const btnApplyFilter = document.getElementById('btnApplyFilter');
+        const btnClearFilter = document.getElementById('btnClearFilter');
+
+        const btnExport = document.getElementById('btnExport');
+        const btnQuickPay = document.getElementById('btnQuickPay');
+        const btnNewSKPD = document.getElementById('btnNewSKPD');
+        const btnNewBill = document.getElementById('btnNewBill');
+        const btnReconcile = document.getElementById('btnReconcile');
+        const btnViewDetail = document.getElementById('btnViewDetail');
+        const btnBulkAction = document.getElementById('btnBulkAction');
+
+        const searchBox = document.getElementById('searchBox');
+        const roleSelect = document.getElementById('roleSelect');
+        const userName = document.getElementById('userName');
+
+        if (btnSidebar) btnSidebar.addEventListener('click', () => toggleSidebar());
+        if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', () => toggleSidebar(false));
+
+        if (menu){
+          menu.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-module]');
+            if (!btn) return;
+            state.activeModule = btn.dataset.module;
+            renderMenu();
+            renderDashboard();
+            toggleSidebar(false);
+          });
+        }
+
+        const steps = document.getElementById('steps');
+        if (steps){
+          steps.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-step]');
+            if (!btn) return;
+            goToStep(btn.dataset.step);
+          });
+        }
+
+        if (btnResetFlow){
+          btnResetFlow.addEventListener('click', () => {
+            state.activeStep = 'data';
+            state.selectedNopol = null;
+            renderSteps();
+            renderStepContent('data');
+            highlightSelectedRow();
+          });
+        }
+
+        if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
+        const modal = document.getElementById('modal');
+        if (modal){
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+          });
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') closeModal();
+          });
+        }
+
+        if (btnApplyFilter) btnApplyFilter.addEventListener('click', filterTable);
+        if (btnClearFilter){
+          btnClearFilter.addEventListener('click', () => {
+            const status = document.getElementById('filterStatus');
+            const period = document.getElementById('filterPeriod');
+            const keyword = document.getElementById('filterKeyword');
+            if (status) status.value = 'all';
+            if (period) period.value = '2025';
+            if (keyword) keyword.value = '';
+            filterTable();
+          });
+        }
+
+        if (searchBox){
+          searchBox.addEventListener('input', () => {
+            // Quick search mirrors keyword filter
+            const kw = searchBox.value;
+            const keyword = document.getElementById('filterKeyword');
+            if (keyword) keyword.value = kw;
+            state.filters.keyword = kw;
+            renderTable();
+            updateStats();
+          });
+        }
+
+        if (roleSelect){
+          roleSelect.addEventListener('change', () => {
+            state.role = roleSelect.value;
+            if (userName) userName.textContent = 'Mode: ' + (state.role === 'petugas' ? 'Petugas' : 'Wajib Pajak');
+            // Reset selection and rerender
+            state.selectedNopol = null;
+            renderMenu();
+            renderDashboard();
+          });
+        }
+
+        // Quick actions
+        if (btnExport) btnExport.addEventListener('click', () => goToStep('laporan'));
+        if (btnQuickPay) btnQuickPay.addEventListener('click', () => goToStep('pembayaran'));
+        if (btnNewSKPD) btnNewSKPD.addEventListener('click', () => goToStep('penetapan'));
+        if (btnNewBill) btnNewBill.addEventListener('click', () => goToStep('penagihan'));
+        if (btnReconcile) btnReconcile.addEventListener('click', () => goToStep('rekonsiliasi'));
+
+        if (btnViewDetail){
+          btnViewDetail.addEventListener('click', () => {
+            if (!state.selectedNopol){
+              openModal('Detail', '<p>Pilih dulu baris kendaraan di tabel untuk melihat detail.</p>');
+              return;
+            }
+            const v = MOCK_DB.vehicles.find(x => x.nopol === state.selectedNopol);
+            if (!v){
+              openModal('Detail', '<p>Data tidak ditemukan.</p>');
+              return;
+            }
+            openModal('Detail Kendaraan & WP',
+              '<p><strong>' + v.nopol + '</strong> • ' + v.merk + ' ' + v.model + ' • Tahun ' + v.tahun + '</p>' +
+              '<p>Wajib Pajak: <strong>' + v.nama + '</strong> (NIK ' + v.nik + ')</p>' +
+              '<p>Alamat: ' + v.alamat + '</p>' +
+              '<p>SKPD: <strong>' + (v.skpd || '-') + '</strong> • Jatuh tempo: <strong>' + v.jatuhTempo + '</strong></p>' +
+              '<p>Status: ' + statusBadge(v.status) + ' • Pembayaran: ' + paymentBadge(v.bayar) + '</p>'
+            );
+          });
+        }
+
+        if (btnBulkAction){
+          btnBulkAction.addEventListener('click', () => {
+            openModal('Aksi Massal (Stub)',
+              '<p>Contoh aksi massal:</p>' +
+              '<ul>' +
+                '<li>Kirim reminder untuk semua tunggakan</li>' +
+                '<li>Export daftar tunggakan per kabupaten/kota</li>' +
+                '<li>Batch validasi pembayaran</li>' +
+              '</ul>'
+            );
+          });
+        }
+
+      } catch (err){
+        console.error('UI binding error:', err);
+      }
+    }
+
+    function initApp(){
+      renderMenu();
+      renderDashboard();
+      bindUI();
+    }
+
+    // Boot
+    initApp();
+  </script>
+</body>
+</html>
