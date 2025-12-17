@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prototype eSamsat Maluku Utara</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230f4c81'/%3E%3Ctext x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, system-ui, -apple-system, BlinkMacSystemFont, %22Segoe UI%22, sans-serif' font-size='28' fill='%23fff' font-weight='700'%3EeS%3C/text%3E%3C/svg%3E">
+  <style>
+    :root {
+      --primary: #0f4c81;
+      --accent: #1ec7a6;
+      --background: #f4f7fb;
+      --text: #0f172a;
+      --muted: #64748b;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --shadow: 0 10px 30px rgba(15, 76, 129, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--background);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: linear-gradient(115deg, #0f4c81, #1d6fb6);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0.2px;
+    }
+
+    .brand-subtitle {
+      margin: 2px 0 0 0;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .badge {
+      background: rgba(255, 255, 255, 0.16);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.32);
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 26px;
+      padding: 26px 32px 38px;
+    }
+
+    aside {
+      background: #0c3561;
+      color: #e7eef6;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 12px 32px rgba(12, 53, 97, 0.35);
+      padding: 22px 20px;
+      position: sticky;
+      top: 98px;
+      height: fit-content;
+    }
+
+    .sidebar-title {
+      margin: 0 0 10px;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+    }
+
+    .sidebar-subtitle {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: #c9d5e5;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .feature-list a {
+      display: grid;
+      grid-template-columns: 46px 1fr;
+      gap: 10px;
+      align-items: center;
+      text-decoration: none;
+      padding: 12px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #f8fbff;
+      transition: all 0.18s ease;
+    }
+
+    .feature-list a span {
+      display: inline-flex;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      align-items: center;
+      justify-content: center;
+      background: rgba(30, 199, 166, 0.18);
+      color: #98f0df;
+      font-weight: 700;
+      border: 1px solid rgba(30, 199, 166, 0.45);
+    }
+
+    .feature-list a:hover {
+      transform: translateX(2px);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    .sidebar-note {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #b6c5da;
+      line-height: 1.5;
+      border-top: 1px solid rgba(255, 255, 255, 0.18);
+      padding-top: 12px;
+    }
+
+    .content {
+      display: grid;
+      gap: 22px;
+    }
+
+    .hero {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 26px 28px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15, 76, 129, 0.12);
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 13px;
+      border: 1px solid rgba(15, 76, 129, 0.18);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.2px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      cursor: default;
+    }
+
+    .btn.secondary {
+      background: #fff;
+      color: var(--primary);
+      border-color: rgba(15, 76, 129, 0.28);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
+      display: grid;
+      gap: 8px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .list {
+      margin: 6px 0 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .section-title {
+      margin: 8px 0 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      letter-spacing: 0.2px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 8px rgba(30, 199, 166, 0.18);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+      box-shadow: 0 8px 20px rgba(15, 76, 129, 0.05);
+      display: grid;
+      gap: 6px;
+    }
+
+    .feature-card h4 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--primary);
+      letter-spacing: 0.1px;
+    }
+
+    .feature-card small {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    footer {
+      background: #0f4c81;
+      color: #dce8f5;
+      padding: 18px 32px;
+      text-align: center;
+      font-size: 13px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      margin-top: 10px;
+    }
+
+    @media (max-width: 1080px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: relative;
+        top: 0;
+      }
+    }
+
+    @media (max-width: 720px) {
+      header {
+        padding: 14px 18px;
+      }
+
+      .page {
+        padding: 18px 16px 28px;
+        gap: 18px;
+      }
+
+      .feature-list a {
+        grid-template-columns: 40px 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">eS</div>
+      <div>
+        <p class="brand-title">eSamsat Maluku Utara</p>
+        <p class="brand-subtitle">Prototype penetapan &amp; penagihan PKB</p>
+      </div>
+    </div>
+    <div class="badge">Preview statis · Semua aset tersedia lokal</div>
+  </header>
+
+  <main class="page">
+    <aside>
+      <h2 class="sidebar-title">Daftar Fitur</h2>
+      <p class="sidebar-subtitle">Merujuk pada docs/features.md untuk menjamin konsistensi preview.</p>
+      <ol class="feature-list">
+        <li><a href="#feat-1"><span>01</span>Autentikasi &amp; Manajemen Profil</a></li>
+        <li><a href="#feat-2"><span>02</span>Manajemen Peran (Admin/Petugas/Wajib Pajak)</a></li>
+        <li><a href="#feat-3"><span>03</span>Registrasi &amp; Validasi Kendaraan</a></li>
+        <li><a href="#feat-4"><span>04</span>Verifikasi Petugas atas Dokumen Digital</a></li>
+        <li><a href="#feat-5"><span>05</span>Penetapan Pajak (PKB, BBNKB, Denda, Diskon)</a></li>
+        <li><a href="#feat-6"><span>06</span>Penerbitan NPPKB &amp; Masa Berlaku</a></li>
+        <li><a href="#feat-7"><span>07</span>Penagihan &amp; Pembuatan Kode Bayar</a></li>
+        <li><a href="#feat-8"><span>08</span>Notifikasi Jatuh Tempo via SMS/Email</a></li>
+        <li><a href="#feat-9"><span>09</span>Pembayaran Digital (QRIS/VA/Loket)</a></li>
+        <li><a href="#feat-10"><span>10</span>Validasi Bukti Bayar &amp; Penerbitan e-TBPKP</a></li>
+        <li><a href="#feat-11"><span>11</span>Dashboard Monitoring &amp; Aging Tagihan</a></li>
+        <li><a href="#feat-12"><span>12</span>Laporan Harian/Bulanan</a></li>
+        <li><a href="#feat-13"><span>13</span>Riwayat Transaksi &amp; Status Pembayaran</a></li>
+        <li><a href="#feat-14"><span>14</span>Helpdesk, FAQ, &amp; Pengaduan Online</a></li>
+        <li><a href="#feat-15"><span>15</span>Notifikasi Perpanjangan STNK &amp; Reminder Pajak</a></li>
+      </ol>
+      <p class="sidebar-note">Semua tautan bersifat internal sehingga tidak ada aset eksternal yang dapat memicu error 404.</p>
+    </aside>
+
+    <section class="content">
+      <section class="hero">
+        <span class="pill">Fokus awal: Penetapan, penagihan, dan pembayaran PKB/BBNKB</span>
+        <h1>Prototype eSamsat Maluku Utara</h1>
+        <p>Pratinjau statis untuk alur wajib pajak, petugas, dan admin Bapenda dalam memproses penetapan pajak kendaraan bermotor hingga pembayaran digital tanpa bergantung pada backend.</p>
+        <div class="hero-actions">
+          <div class="btn">Ringkas · 3 alur pengguna</div>
+          <div class="btn secondary">Statis · Semua aset lokal</div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">Alur Ringkas</div>
+        <div class="cards-grid">
+          <div class="card">
+            <h3>Wajib Pajak</h3>
+            <p>Login/registrasi, cari STNK/Nopol, unggah dokumen, pilih kanal bayar, unggah bukti, dan unduh e-TBPKP.</p>
+            <ul class="list">
+              <li>Self-service kode bayar, status verifikasi, reminder jatuh tempo.</li>
+              <li>Pilihan bayar QRIS, VA, atau loket debit.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Petugas</h3>
+            <p>Validasi kendaraan, hitung PKB/BBNKB, tambahkan denda/diskon, terbitkan NPPKB, dan sahkan pengesahan.</p>
+            <ul class="list">
+              <li>Checklist dokumen digital dan riwayat verifikasi.</li>
+              <li>Kontrol status bayar &amp; penerbitan e-TBPKP.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Admin Bapenda</h3>
+            <p>Kelola peran dan kanal pembayaran, monitor penerimaan &amp; aging, serta ekspor laporan harian/bulanan.</p>
+            <ul class="list">
+              <li>Widget dashboard untuk tren penerimaan.</li>
+              <li>Pengaturan template SMS/Email pengingat.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">Detail Fitur</div>
+        <div class="feature-grid">
+          <div class="feature-card" id="feat-1">
+            <h4>Autentikasi &amp; Manajemen Profil</h4>
+            <small>Login, registrasi, reset PIN, dan update kontak wajib pajak.</small>
+          </div>
+          <div class="feature-card" id="feat-2">
+            <h4>Manajemen Peran (Admin/Petugas/Wajib Pajak)</h4>
+            <small>Kontrol akses terpisah untuk administrasi, verifikasi, dan self-service.</small>
+          </div>
+          <div class="feature-card" id="feat-3">
+            <h4>Registrasi &amp; Validasi Kendaraan</h4>
+            <small>Pencarian STNK/Nopol, unggah dokumen, dan validasi nomor rangka.</small>
+          </div>
+          <div class="feature-card" id="feat-4">
+            <h4>Verifikasi Petugas atas Dokumen Digital</h4>
+            <small>Checklist kelengkapan dan catatan koreksi oleh petugas.</small>
+          </div>
+          <div class="feature-card" id="feat-5">
+            <h4>Penetapan Pajak (PKB, BBNKB, Denda, Diskon)</h4>
+            <small>Perhitungan otomatis termasuk denda dan insentif diskon.</small>
+          </div>
+          <div class="feature-card" id="feat-6">
+            <h4>Penerbitan NPPKB &amp; Masa Berlaku</h4>
+            <small>Nomor penetapan, tanggal efektif, dan masa berlakunya.</small>
+          </div>
+          <div class="feature-card" id="feat-7">
+            <h4>Penagihan &amp; Pembuatan Kode Bayar</h4>
+            <small>Generator kode bayar unik yang terhubung ke kanal pembayaran.</small>
+          </div>
+          <div class="feature-card" id="feat-8">
+            <h4>Notifikasi Jatuh Tempo via SMS/Email</h4>
+            <small>Template pengingat otomatis untuk kode bayar dan jatuh tempo.</small>
+          </div>
+          <div class="feature-card" id="feat-9">
+            <h4>Pembayaran Digital (QRIS/VA/Loket)</h4>
+            <small>Pilihan bayar multi-kanal dengan status real-time.</small>
+          </div>
+          <div class="feature-card" id="feat-10">
+            <h4>Validasi Bukti Bayar &amp; Penerbitan e-TBPKP</h4>
+            <small>Upload bukti, validasi otomatis, dan penerbitan pengesahan digital.</small>
+          </div>
+          <div class="feature-card" id="feat-11">
+            <h4>Dashboard Monitoring &amp; Aging Tagihan</h4>
+            <small>Ringkasan penerimaan, aging piutang, dan kanal pembayaran teratas.</small>
+          </div>
+          <div class="feature-card" id="feat-12">
+            <h4>Laporan Harian/Bulanan</h4>
+            <small>Ekspor placeholder CSV/PDF untuk audit dan rekonsiliasi.</small>
+          </div>
+          <div class="feature-card" id="feat-13">
+            <h4>Riwayat Transaksi &amp; Status Pembayaran</h4>
+            <small>Log lengkap status verifikasi, penagihan, dan pembayaran.</small>
+          </div>
+          <div class="feature-card" id="feat-14">
+            <h4>Helpdesk, FAQ, &amp; Pengaduan Online</h4>
+            <small>Saluran bantuan dan pencatatan keluhan wajib pajak.</small>
+          </div>
+          <div class="feature-card" id="feat-15">
+            <h4>Notifikasi Perpanjangan STNK &amp; Reminder Pajak</h4>
+            <small>Pengingat periodik untuk kewajiban perpanjangan STNK.</small>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    © 2024 Bapenda Provinsi Maluku Utara · Prototype eSamsat · Pratinjau statis tanpa dependensi eksternal
+  </footer>
+</body>
+</html>
